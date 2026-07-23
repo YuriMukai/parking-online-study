@@ -282,7 +282,7 @@ const CONFIG = {
   SCRUB_VIDEO: "videos/parking_long.mp4",
   MAIN_TRIAL_ORDER: ["normal", "luxury", "pedestrian", "crowded"],
   RANDOMIZE_TRIALS: true,           // 4本の本番動画の順序をランダム化
-  PROLIFIC_COMPLETION_CODE: "XXXXXXXX", // ← Prolificの完了コードに置き換え
+  PROLIFIC_COMPLETION_CODE: "C1F4AZRG", // Prolificの完了コード(スタディを作り直した場合は更新)
   DATA_ENDPOINT: "",                // ← Google Apps Script等のURL(空ならCSVダウンロードのみ)
   REQUIRE_FULLSCREEN: true
 };
@@ -330,10 +330,10 @@ function showWelcome(){
   render(`
     <span class="eyebrow">Research study</span>
     <h1>Parking Distance Study</h1>
-    <p>Thank you for taking part. In this study you will watch short driving videos and answer a few questions. The whole session takes about <strong>10 minutes</strong>.</p>
+    <p>Thank you for taking part. In this study you will watch short driving videos and answer a few questions.</p>
     <h2>What you will do</h2>
     <ul class="steps">
-      <li><strong>Video task</strong> — You will complete 1 practice round and 4 main rounds. You will watch 1 practice video and 4 main videos in fullscreen. In each, a car is reversing into a parallel parking spot — press <strong>STOP</strong> at the exact moment <em>you</em> would stop the car. After the 4 videos, there is one final fullscreen task where you place the car yourself using a slider.</li>
+      <li><strong>Video task</strong> — You will complete 1 practice round and 4 main rounds. You will watch 1 practice video and 4 main videos in fullscreen. In each, a car is moving into a parallel parking spot — press <strong>STOP</strong> at the exact moment <em>you</em> would stop the car. After the 4 videos, there is one final fullscreen task where you place the car yourself using a slider.</li>
       <li><strong>Questions about the videos</strong> — A few short questions about how you felt during the videos.</li>
       <li><strong>Questions about you</strong> — Your driving experience, habits, and car insurance.</li>
     </ul>
@@ -349,7 +349,7 @@ function showPracticeIntro(){
     <span class="eyebrow">Practice</span>
     <h1>Practice round</h1>
     <p>Let's try one practice video first so you can get used to the task.</p>
-    <p>The video will play in <strong>fullscreen</strong>. Watch the car reverse toward the parking position. When the car reaches the distance where <strong>you would stop</strong>, press the red <strong>STOP</strong> button (or the <strong>space bar</strong>).</p>
+    <p>The video will play in <strong>fullscreen</strong>. Watch the car move into the parking position. When the car reaches the distance where <strong>you would stop</strong>, press the red <strong>STOP</strong> button (or the <strong>space bar</strong>).</p>
         <p class="muted">There is no right or wrong answer — respond based on your own judgment as a driver.</p>
     <button class="primary" onclick="startTrial('practice', true)">Start practice video</button>
   `);
@@ -371,6 +371,19 @@ function showTrialIntro(){
 }
 
 let lastTrial = null;
+let pendingRedo = null;
+const redoneConditions = new Set();
+
+function redoTrial(){
+  const t = lastTrial;
+  if (!t || t.is_practice || redoneConditions.has(t.condition)) return;
+  redoneConditions.add(t.condition);
+  // drop the first attempt; the redo result becomes the final record
+  const idx = data.trials.lastIndexOf(t);
+  if (idx > -1) data.trials.splice(idx, 1);
+  pendingRedo = { condition: t.condition, order_index: t.order_index };
+  startTrial(t.condition, false);
+}
 
 function showTrialDone(trial){
   lastTrial = trial;
@@ -380,9 +393,12 @@ function showTrialDone(trial){
     : `The video ended without a STOP press. That's okay — it was recorded as "did not stop".`;
   const commentBox = `
     <div class="q" style="border-bottom:none;margin-bottom:0;padding-bottom:0">
-      <label class="qtitle" for="trialComment">Any comments about this video? If there was a reason for where you stopped (or why you didn't), please describe it briefly. <span class="muted" style="font-weight:400">(optional)</span></label>
+      <label class="qtitle" for="trialComment">When deciding your parking distance in this video, did you have any particular reason for your choice? If so, please describe it briefly. <span class="muted" style="font-weight:400">(optional)</span></label>
       <textarea id="trialComment" placeholder="e.g. I stopped early because..."></textarea>
     </div>`;
+  const redoBtn = (!isPractice && !redoneConditions.has(trial.condition))
+    ? `<br><button class="ghost" onclick="redoTrial()">I pressed STOP by mistake — watch this video again (once)</button>`
+    : "";
   render(`
     <div class="badge-ok">✓ Response recorded</div>
     <h1>${isPractice ? "Practice complete" : "Video complete"}</h1>
@@ -393,9 +409,9 @@ function showTrialDone(trial){
          <button class="primary" onclick="saveTrialComment(); showTrialIntro()">Continue to main task</button>
          <br><button class="ghost" onclick="saveTrialComment(); startTrial('practice', true)">Repeat practice once more</button>`
       : trialQueue.length > 0
-        ? `<button class="primary" onclick="saveTrialComment(); showTrialIntro()">Next video</button>`
+        ? `<button class="primary" onclick="saveTrialComment(); showTrialIntro()">Next video</button>${redoBtn}`
         : `<p style="margin-top:20px">That was the last of the 4 videos. One final video task remains.</p>
-           <button class="primary" onclick="saveTrialComment(); showScrubIntro()">Continue</button>`
+           <button class="primary" onclick="saveTrialComment(); showScrubIntro()">Continue</button>${redoBtn}`
     }
   `);
 }
@@ -413,7 +429,7 @@ function showScrubIntro(){
     <h1>Where would you stop the car?</h1>
     <p>This time, the video will <strong>not play by itself</strong>. Instead, <strong>you control the car's position</strong> with a large slider at the bottom of the screen:</p>
     <ul class="steps">
-      <li>Drag the slider <strong>right</strong> — the car moves <strong>closer</strong> to the vehicle behind.</li>
+      <li>Drag the slider <strong>right</strong> — the car moves <strong>closer</strong> to the other vehicle.</li>
       <li>Drag the slider <strong>left</strong> — the car moves <strong>back</strong> again. You can adjust as many times as you like.</li>
       <li>Use the <strong>◀ / ▶ buttons</strong> for tiny adjustments.</li>
     </ul>
@@ -512,16 +528,19 @@ let fsExitedDuringTrial = false;
 
 function startTrial(condition, isPractice){
   const meta = CONFIG.VIDEOS[condition];
+  const isRedo = !!(pendingRedo && pendingRedo.condition === condition && !isPractice);
   currentTrial = {
     condition,
     is_practice: isPractice,
-    order_index: isPractice ? 0 : (CONFIG.MAIN_TRIAL_ORDER.length - trialQueue.length + 1),
+    is_redo: isRedo,
+    order_index: isPractice ? 0 : (isRedo ? pendingRedo.order_index : (CONFIG.MAIN_TRIAL_ORDER.length - trialQueue.length + 1)),
     stop_pressed: false,
     stop_video_time_s: null,
     video_duration_s: null,
     fullscreen_exited: false,
     started_at: new Date().toISOString()
   };
+  if (isRedo) pendingRedo = null;
   fsExitedDuringTrial = false;
 
   vid.src = meta.src;
@@ -811,6 +830,7 @@ function flattenData(){
     flat[`${p}_order_index`] = t.order_index;
     flat[`${p}_fullscreen_exited`] = t.fullscreen_exited;
     flat[`${p}_comment`] = t.comment ?? "";
+    flat[`${p}_was_redone`] = t.is_redo ?? false;
   });
   if (data.scrub){
     flat.scrub_selected_time_s = data.scrub.selected_time_s;
@@ -868,7 +888,7 @@ function showDone(sent){
     <div class="badge-ok">✓ ${sent ? "Data submitted" : "Data saved"}</div>
     <h1>Thank you!</h1>
     <p>Your responses have been recorded. Thank you for taking part in this study.</p>
-    ${sent ? "" : `<p class="muted">A CSV file with your responses was downloaded. If the researcher asked you to upload it, please do so; otherwise you can ignore it.</p>`}
+    ${sent ? "" : (CONFIG.DATA_ENDPOINT ? "" : `<p class="muted">(Test mode: a CSV copy of the responses was downloaded because no data endpoint is configured. Participants will not see this once DATA_ENDPOINT is set.)</p>`)}
     <p>Click below to return to Prolific and register your completion.<br>
     Your completion code: <strong>${code}</strong></p>
     <button class="primary" onclick="location.href='${url}'">Return to Prolific</button>
