@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parking Distance Study</title>
+<!--
+  ============================================================
+  PARKING DISTANCE STUDY — Prolific external study app
+  ------------------------------------------------------------
+  SETUP (edit the CONFIG object below):
+  1. VIDEOS: set the URL/path for each of the 5 videos
+     (practice + 4 conditions). Host them next to this file
+     or on any CDN that allows cross-origin video playback.
+  2. PROLIFIC_COMPLETION_CODE: paste the completion code shown
+     in your Prolific study setup page.
+  3. DATA_ENDPOINT (optional): a URL that accepts a POST with
+     JSON (e.g. a Google Apps Script Web App). If left empty,
+     participants are asked to download a CSV and upload it,
+     OR you can rely on the endpoint only. Recommended: set
+     the endpoint so data collection is automatic.
+  4. RANDOMIZE_TRIALS: true = the 4 main conditions are shown
+     in random order per participant (order is recorded).
+  ============================================================
+-->
+<style>
+:root{
+  --ink:#1c2733;
+  --ink-soft:#5b6b7c;
+  --paper:#f6f7f9;
+  --card:#ffffff;
+  --line:#dde3ea;
+  --accent:#2456a6;
+  --accent-soft:#e8eef8;
+  --stop:#c9352b;
+  --stop-hover:#a82820;
+  --ok:#1f7a4d;
+  --radius:14px;
+  font-size:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:"Avenir Next","Segoe UI",system-ui,-apple-system,sans-serif;
+  background:var(--paper);
+  color:var(--ink);
+  line-height:1.6;
+  min-height:100vh;
+}
+.wrap{max-width:720px;margin:0 auto;padding:40px 20px 80px}
+.card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:36px;
+  box-shadow:0 1px 2px rgba(28,39,51,.04);
+}
+h1{font-size:1.55rem;font-weight:700;letter-spacing:-.01em;margin-bottom:14px}
+h2{font-size:1.2rem;font-weight:700;margin:26px 0 10px}
+p{margin-bottom:12px;color:var(--ink)}
+.muted{color:var(--ink-soft);font-size:.95rem}
+.eyebrow{
+  display:inline-block;font-size:.75rem;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;
+  color:var(--accent);background:var(--accent-soft);
+  padding:4px 10px;border-radius:999px;margin-bottom:16px;
+}
+.progress{
+  height:6px;background:var(--line);border-radius:999px;
+  margin-bottom:28px;overflow:hidden;
+}
+.progress > div{
+  height:100%;background:var(--accent);width:0%;
+  transition:width .4s ease;border-radius:999px;
+}
+button.primary{
+  display:inline-block;margin-top:22px;
+  background:var(--accent);color:#fff;border:none;
+  font:inherit;font-weight:700;font-size:1rem;
+  padding:13px 30px;border-radius:10px;cursor:pointer;
+}
+button.primary:hover{filter:brightness(1.08)}
+button.primary:disabled{opacity:.45;cursor:not-allowed}
+button.ghost{
+  display:inline-block;margin-top:10px;background:none;
+  border:1px solid var(--line);color:var(--ink-soft);
+  font:inherit;font-size:.9rem;padding:9px 18px;
+  border-radius:10px;cursor:pointer;
+}
+ul.steps{margin:14px 0 4px 0;list-style:none}
+ul.steps li{
+  padding:10px 0 10px 34px;position:relative;
+  border-bottom:1px dashed var(--line);
+}
+ul.steps li:last-child{border-bottom:none}
+ul.steps li::before{
+  content:"";position:absolute;left:6px;top:18px;
+  width:10px;height:10px;border-radius:50%;
+  background:var(--accent);
+}
+/* ---------- form ---------- */
+.q{margin:26px 0;padding-bottom:22px;border-bottom:1px solid var(--line)}
+.q:last-of-type{border-bottom:none}
+.q label.qtitle{display:block;font-weight:700;margin-bottom:10px}
+.q .req{color:var(--stop);margin-left:4px}
+textarea,input[type=text],input[type=number],select{
+  width:100%;font:inherit;padding:11px 13px;
+  border:1px solid var(--line);border-radius:10px;
+  background:#fff;color:var(--ink);
+}
+textarea{min-height:96px;resize:vertical}
+textarea:focus,input:focus,select:focus{
+  outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent);
+}
+.choices{display:flex;flex-direction:column;gap:8px}
+.choices.row{flex-direction:row;flex-wrap:wrap;gap:10px}
+.choice{
+  display:flex;align-items:center;gap:10px;
+  border:1px solid var(--line);border-radius:10px;
+  padding:10px 14px;cursor:pointer;background:#fff;
+}
+.choice:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.choice input{accent-color:var(--accent);width:17px;height:17px}
+.likert{display:flex;gap:6px;flex-wrap:wrap}
+.likert .choice{padding:9px 0;width:52px;justify-content:center;flex-direction:column;gap:4px}
+.likert .choice span{font-size:.95rem;font-weight:600}
+.scale-ends{display:flex;justify-content:space-between;margin-top:6px;font-size:.8rem;color:var(--ink-soft)}
+.error{color:var(--stop);font-size:.9rem;margin-top:6px;display:none}
+.q.invalid .error{display:block}
+.q.invalid textarea,.q.invalid input[type=text],.q.invalid input[type=number],.q.invalid select{border-color:var(--stop)}
+/* ---------- fullscreen scrub stage (distance slider) ---------- */
+#scrubStage{position:fixed;inset:0;background:#000;display:none;flex-direction:column;z-index:50}
+#scrubStage.active{display:flex}
+#scrubStage video{flex:1;width:100%;height:100%;object-fit:contain;background:#000}
+#scrubHintTop{
+  position:absolute;top:2.5vh;left:0;right:0;text-align:center;
+  color:rgba(255,255,255,.9);font-size:1.05rem;pointer-events:none;
+  text-shadow:0 1px 4px rgba(0,0,0,.8);z-index:2;
+}
+#scrubPanel{
+  position:absolute;left:0;right:0;bottom:0;z-index:2;
+  padding:56px 4vw 3.5vh;
+  background:linear-gradient(to top, rgba(0,0,0,.88) 55%, rgba(0,0,0,0));
+  display:flex;flex-direction:column;gap:18px;align-items:center;
+}
+.scrub-row{display:flex;align-items:center;gap:18px;justify-content:center;width:100%;max-width:960px;flex-wrap:wrap}
+#scrubSlider{
+  flex:1;min-width:200px;height:12px;cursor:pointer;
+  accent-color:#4d8dee;
+}
+.dist-label{
+  color:#fff;font-weight:800;font-size:.85rem;letter-spacing:.12em;
+  text-transform:uppercase;opacity:.9;
+}
+.nudge{
+  font:inherit;font-weight:700;font-size:.9rem;color:#fff;
+  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.35);
+  border-radius:999px;padding:11px 20px;cursor:pointer;
+}
+.nudge:hover{background:rgba(255,255,255,.22)}
+#scrubConfirm{
+  font:inherit;font-weight:800;font-size:1.15rem;letter-spacing:.02em;
+  color:#fff;background:var(--accent);
+  border:3px solid rgba(255,255,255,.85);border-radius:999px;
+  padding:16px 42px;cursor:pointer;
+  box-shadow:0 6px 30px rgba(0,0,0,.5);
+}
+#scrubConfirm:hover{filter:brightness(1.1)}
+#scrubConfirm:disabled{opacity:.4;cursor:not-allowed}
+/* ---------- trial / fullscreen stage ---------- */
+#stage{
+  position:fixed;inset:0;background:#000;display:none;
+  z-index:50;flex-direction:column;
+}
+#stage.active{display:flex}
+#stage video{flex:1;width:100%;height:100%;object-fit:contain;background:#000}
+#stopBar{
+  position:absolute;left:0;right:0;bottom:0;
+  display:flex;justify-content:center;
+  padding:0 0 4vh 0;pointer-events:none;
+}
+#stopBtn{
+  pointer-events:auto;
+  font:inherit;font-weight:800;font-size:1.5rem;letter-spacing:.06em;
+  color:#fff;background:var(--stop);
+  border:4px solid rgba(255,255,255,.85);
+  border-radius:999px;padding:22px 78px;cursor:pointer;
+  box-shadow:0 6px 30px rgba(0,0,0,.5);
+  transition:transform .08s ease, background .15s ease;
+}
+#stopBtn:hover{background:var(--stop-hover)}
+#stopBtn:active{transform:scale(.96)}
+#stageHint{
+  position:absolute;top:2.5vh;left:0;right:0;text-align:center;
+  color:rgba(255,255,255,.8);font-size:.95rem;pointer-events:none;
+  text-shadow:0 1px 4px rgba(0,0,0,.8);
+}
+#loadingOverlay{
+  position:absolute;inset:0;display:none;flex-direction:column;
+  align-items:center;justify-content:center;gap:16px;
+  background:#000;color:rgba(255,255,255,.85);
+  font-size:1.1rem;font-weight:600;letter-spacing:.03em;
+}
+#loadingOverlay.show{display:flex}
+.spinner{
+  width:38px;height:38px;border-radius:50%;
+  border:4px solid rgba(255,255,255,.2);
+  border-top-color:#fff;
+  animation:spin 1s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.stopped-flash{
+  position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.65);color:#fff;font-size:2rem;font-weight:800;
+  letter-spacing:.05em;
+}
+.badge-ok{
+  display:inline-flex;align-items:center;gap:8px;
+  color:var(--ok);font-weight:700;margin-bottom:8px;
+}
+.trial-label{
+  font-size:.85rem;color:var(--ink-soft);margin-bottom:4px;
+  text-transform:uppercase;letter-spacing:.08em;font-weight:700;
+}
+.center{text-align:center}
+.hidden{display:none !important}
+@media (prefers-reduced-motion: reduce){
+  *{transition:none !important}
+}
+@media (max-width:560px){
+  .card{padding:24px 18px}
+  #stopBtn{font-size:1.2rem;padding:18px 52px}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="progress"><div id="progressBar"></div></div>
+  <div class="card" id="screen"></div>
+</div>
+
+<!-- Fullscreen video stage -->
+<div id="stage">
+  <div id="stageHint">Press STOP (or the space bar) at the moment you would stop your car.</div>
+  <video id="vid" playsinline preload="auto"></video>
+  <div id="stopBar"><button id="stopBtn" type="button">STOP</button></div>
+  <div class="stopped-flash" id="stoppedFlash">Recorded ✓</div>
+  <div id="loadingOverlay"><div class="spinner"></div>Loading video…</div>
+</div>
+
+<!-- Fullscreen scrub stage: place the car with a distance slider -->
+<div id="scrubStage">
+  <div id="scrubHintTop">Drag the slider to move the car. Place it exactly where <strong>you</strong> would stop.</div>
+  <video id="scrubVid" playsinline preload="auto"></video>
+  <div id="scrubPanel">
+    <div class="scrub-row">
+      <span class="dist-label">Far</span>
+      <input type="range" id="scrubSlider" min="0" max="1000" step="1" value="0" aria-label="Car position">
+      <span class="dist-label">Close</span>
+    </div>
+    <div class="scrub-row">
+      <button class="nudge" id="scrubBack" type="button">◀ &nbsp;Back a little</button>
+      <button id="scrubConfirm" type="button" disabled>This is where I would stop</button>
+      <button class="nudge" id="scrubFwd" type="button">Closer a little&nbsp; ▶</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG — edit this section
+   ============================================================ */
+const CONFIG = {
+  VIDEOS: {
+    practice: { src: "videos/practice.mp4",   label: "Practice" },
+    normal:   { src: "videos/normal.mp4",     label: "Condition A" }, // 混んでいない普通の縦列駐車
+    luxury:   { src: "videos/luxury.mp4",     label: "Condition B" }, // 前に高級車
+    pedestrian:{src: "videos/pedestrian.mp4", label: "Condition C" }, // 歩行者が見ている
+    crowded:  { src: "videos/crowded.mp4",    label: "Condition D" }  // 混んでいる都市
+  },
+  // 全4シーン終了後に1回だけ行う「停止位置をスライダーで決める」課題用の長尺動画
+  SCRUB_VIDEO: "videos/parking_long.mp4",
+  MAIN_TRIAL_ORDER: ["normal", "luxury", "pedestrian", "crowded"],
+  RANDOMIZE_TRIALS: true,           // 4本の本番動画の順序をランダム化
+  PROLIFIC_COMPLETION_CODE: "XXXXXXXX", // ← Prolificの完了コードに置き換え
+  DATA_ENDPOINT: "",                // ← Google Apps Script等のURL(空ならCSVダウンロードのみ)
+  REQUIRE_FULLSCREEN: true
+};
+
+/* ============================================================
+   State
+   ============================================================ */
+const params = new URLSearchParams(location.search);
+const data = {
+  prolific_pid: params.get("PROLIFIC_PID") || "",
+  study_id:     params.get("STUDY_ID") || "",
+  session_id:   params.get("SESSION_ID") || "",
+  user_agent:   navigator.userAgent,
+  screen_size:  `${screen.width}x${screen.height}`,
+  started_at:   new Date().toISOString(),
+  finished_at:  null,
+  trial_order:  [],
+  scrub:        null, // final slider task result
+  trials:       [],   // {condition, order_index, is_practice, stop_pressed, stop_video_time_s, video_duration_s, fullscreen_exited, started_at}
+  answers:      {}
+};
+
+let trialQueue = [];   // conditions remaining
+let currentTrial = null;
+let screenIndex = 0;
+
+const TOTAL_SCREENS = 14; // rough count for progress bar
+function setProgress(i){
+  screenIndex = i;
+  document.getElementById("progressBar").style.width =
+    Math.min(100, Math.round(100 * i / TOTAL_SCREENS)) + "%";
+}
+
+const $screen = document.getElementById("screen");
+function render(html){
+  $screen.innerHTML = html;
+  window.scrollTo({top:0});
+}
+
+/* ============================================================
+   Screens
+   ============================================================ */
+function showWelcome(){
+  setProgress(0);
+  render(`
+    <span class="eyebrow">Research study</span>
+    <h1>Parking Distance Study</h1>
+    <p>Thank you for taking part. In this study you will watch short driving videos and answer a few questions. The whole session takes about <strong>10 minutes</strong>.</p>
+    <h2>What you will do</h2>
+    <ul class="steps">
+      <li><strong>Video task</strong> — You will complete 1 practice round and 4 main rounds. You will watch 1 practice video and 4 main videos in fullscreen. In each, a car is reversing into a parallel parking spot — press <strong>STOP</strong> at the exact moment <em>you</em> would stop the car. After the 4 videos, there is one final fullscreen task where you place the car yourself using a slider.</li>
+      <li><strong>Questions about the videos</strong> — A few short questions about how you felt during the videos.</li>
+      <li><strong>Questions about you</strong> — Your driving experience, habits, and car insurance.</li>
+    </ul>
+    <p class="muted">Your responses are anonymous and used for research purposes only. Please complete the study on a computer with a keyboard, in one sitting, without switching tabs.</p>
+    ${data.prolific_pid ? "" : `<p class="muted" style="color:var(--stop)">Note: no Prolific ID was detected in the URL. If you arrived here from Prolific, please return and use the study link provided there.</p>`}
+    <button class="primary" onclick="showPracticeIntro()">Begin</button>
+  `);
+}
+
+function showPracticeIntro(){
+  setProgress(1);
+  render(`
+    <span class="eyebrow">Practice</span>
+    <h1>Practice round</h1>
+    <p>Let's try one practice video first so you can get used to the task.</p>
+    <p>The video will play in <strong>fullscreen</strong>. Watch the car reverse toward the parking position. When the car reaches the distance where <strong>you would stop</strong>, press the red <strong>STOP</strong> button (or the <strong>space bar</strong>).</p>
+        <p class="muted">There is no right or wrong answer — respond based on your own judgment as a driver.</p>
+    <button class="primary" onclick="startTrial('practice', true)">Start practice video</button>
+  `);
+}
+
+function showTrialIntro(){
+  const remaining = trialQueue.length;
+  const total = CONFIG.MAIN_TRIAL_ORDER.length;
+  const num = total - remaining + 1;
+  const cond = trialQueue[0];
+  setProgress(2 + (num - 1) * 2);
+  render(`
+    <span class="eyebrow">Main task</span>
+    <div class="trial-label">Video ${num} of ${total}</div>
+    <h1>Ready for the next video</h1>
+    <p>Same task as before: the video plays in fullscreen, and you press <strong>STOP</strong> (or the space bar) at the moment you would stop the car.</p>
+    <button class="primary" onclick="startTrial('${cond}', false)">Start video ${num}</button>
+  `);
+}
+
+let lastTrial = null;
+
+function showTrialDone(trial){
+  lastTrial = trial;
+  const isPractice = trial.is_practice;
+  const doneMsg = trial.stop_pressed
+    ? `Your response has been recorded.`
+    : `The video ended without a STOP press. That's okay — it was recorded as "did not stop".`;
+  const commentBox = `
+    <div class="q" style="border-bottom:none;margin-bottom:0;padding-bottom:0">
+      <label class="qtitle" for="trialComment">Any comments about this video? If there was a reason for where you stopped (or why you didn't), please describe it briefly. <span class="muted" style="font-weight:400">(optional)</span></label>
+      <textarea id="trialComment" placeholder="e.g. I stopped early because..."></textarea>
+    </div>`;
+  render(`
+    <div class="badge-ok">✓ Response recorded</div>
+    <h1>${isPractice ? "Practice complete" : "Video complete"}</h1>
+    <p>${doneMsg}</p>
+    ${commentBox}
+    ${isPractice
+      ? `<p style="margin-top:20px">Now the main task begins. You will see <strong>4 videos</strong>. The situations differ slightly between videos — just respond naturally each time.</p>
+         <button class="primary" onclick="saveTrialComment(); showTrialIntro()">Continue to main task</button>
+         <br><button class="ghost" onclick="saveTrialComment(); startTrial('practice', true)">Repeat practice once more</button>`
+      : trialQueue.length > 0
+        ? `<button class="primary" onclick="saveTrialComment(); showTrialIntro()">Next video</button>`
+        : `<p style="margin-top:20px">That was the last of the 4 videos. One final video task remains.</p>
+           <button class="primary" onclick="saveTrialComment(); showScrubIntro()">Continue</button>`
+    }
+  `);
+}
+
+function saveTrialComment(){
+  const box = document.getElementById("trialComment");
+  if (box && lastTrial) lastTrial.comment = box.value.trim() || null;
+}
+
+/* ---------- Final scrub task: place the car with a distance slider (runs once) ---------- */
+function showScrubIntro(){
+  setProgress(9);
+  render(`
+    <span class="eyebrow">Final video task</span>
+    <h1>Where would you stop the car?</h1>
+    <p>This time, the video will <strong>not play by itself</strong>. Instead, <strong>you control the car's position</strong> with a large slider at the bottom of the screen:</p>
+    <ul class="steps">
+      <li>Drag the slider <strong>right</strong> — the car moves <strong>closer</strong> to the vehicle behind.</li>
+      <li>Drag the slider <strong>left</strong> — the car moves <strong>back</strong> again. You can adjust as many times as you like.</li>
+      <li>Use the <strong>◀ / ▶ buttons</strong> for tiny adjustments.</li>
+    </ul>
+    <p>Place the car at the <strong>exact spot where you would stop</strong>, then press <strong>"This is where I would stop"</strong>.</p>
+    <button class="primary" onclick="startScrubTask()">Start</button>
+  `);
+}
+
+const scrubStage = document.getElementById("scrubStage");
+const scrubVid = document.getElementById("scrubVid");
+const scrubSlider = document.getElementById("scrubSlider");
+const scrubConfirmBtn = document.getElementById("scrubConfirm");
+let scrubActive = false;
+let scrubInteracted = false;
+let scrubSeekCount = 0;
+
+function startScrubTask(){
+  scrubActive = true;
+  scrubInteracted = false;
+  scrubSeekCount = 0;
+  scrubConfirmBtn.disabled = true;
+  scrubSlider.value = 0;
+  scrubVid.src = CONFIG.SCRUB_VIDEO;
+  scrubVid.load();
+  scrubStage.classList.add("active");
+  if (CONFIG.REQUIRE_FULLSCREEN && scrubStage.requestFullscreen) {
+    scrubStage.requestFullscreen().catch(()=>{});
+  }
+  scrubSlider.focus();
+}
+
+scrubVid.addEventListener("loadedmetadata", () => {
+  // show the first frame
+  scrubVid.currentTime = 0.01;
+});
+scrubVid.addEventListener("error", () => {
+  if (!scrubActive) return;
+  scrubActive = false;
+  if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+  scrubStage.classList.remove("active");
+  render(`
+    <span class="eyebrow" style="color:var(--stop);background:#fbeae9">Playback problem</span>
+    <h1>The video could not be loaded</h1>
+    <p>Please check your internet connection and try again.</p>
+    <button class="primary" onclick="startScrubTask()">Try again</button>
+    <p class="muted" style="margin-top:18px">(Technical detail for the researcher: could not load <code>${CONFIG.SCRUB_VIDEO}</code>)</p>
+  `);
+});
+
+function scrubSeekTo(fraction){
+  if (!isFinite(scrubVid.duration)) return;
+  const d = scrubVid.duration;
+  scrubVid.currentTime = Math.min(Math.max(fraction * d, 0), Math.max(d - 0.05, 0));
+  scrubSeekCount++;
+  if (!scrubInteracted){
+    scrubInteracted = true;
+    scrubConfirmBtn.disabled = false;
+  }
+}
+scrubSlider.addEventListener("input", () => scrubSeekTo(scrubSlider.value / 1000));
+function scrubNudge(deltaSeconds){
+  if (!isFinite(scrubVid.duration)) return;
+  const f = (scrubVid.currentTime + deltaSeconds) / scrubVid.duration;
+  scrubSeekTo(f);
+  scrubSlider.value = Math.round(Math.min(Math.max(f, 0), 1) * 1000);
+}
+document.getElementById("scrubBack").addEventListener("click", () => scrubNudge(-0.3));
+document.getElementById("scrubFwd").addEventListener("click", () => scrubNudge(0.3));
+
+scrubConfirmBtn.addEventListener("click", () => {
+  if (!scrubActive) return;
+  scrubActive = false;
+  data.scrub = {
+    selected_time_s: scrubVid.currentTime,
+    video_duration_s: isFinite(scrubVid.duration) ? scrubVid.duration : null,
+    selected_fraction: isFinite(scrubVid.duration) ? scrubVid.currentTime / scrubVid.duration : null,
+    seek_count: scrubSeekCount
+  };
+  if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+  scrubStage.classList.remove("active");
+  scrubVid.removeAttribute("src"); scrubVid.load();
+  render(`
+    <div class="badge-ok">✓ Position recorded</div>
+    <h1>Video tasks complete</h1>
+    <p>Thank you. Next, a few short questions about the videos you watched.</p>
+    <button class="primary" onclick="showVideoQuestions()">Continue to questions</button>
+  `);
+});
+
+/* ---------- Trial engine ---------- */
+const stage = document.getElementById("stage");
+const vid = document.getElementById("vid");
+const stopBtn = document.getElementById("stopBtn");
+const stoppedFlash = document.getElementById("stoppedFlash");
+let fsExitedDuringTrial = false;
+
+function startTrial(condition, isPractice){
+  const meta = CONFIG.VIDEOS[condition];
+  currentTrial = {
+    condition,
+    is_practice: isPractice,
+    order_index: isPractice ? 0 : (CONFIG.MAIN_TRIAL_ORDER.length - trialQueue.length + 1),
+    stop_pressed: false,
+    stop_video_time_s: null,
+    video_duration_s: null,
+    fullscreen_exited: false,
+    started_at: new Date().toISOString()
+  };
+  fsExitedDuringTrial = false;
+
+  vid.src = meta.src;
+  vid.load();
+  stage.classList.add("active");
+  stoppedFlash.style.display = "none";
+  stopBtn.disabled = true; // enabled once the video actually starts playing
+  loadingOverlay.classList.add("show");
+
+  const playIt = () => vid.play().catch(()=>{ /* user gesture already provided */ });
+
+  if (CONFIG.REQUIRE_FULLSCREEN && stage.requestFullscreen) {
+    stage.requestFullscreen().then(playIt).catch(playIt);
+  } else {
+    playIt();
+  }
+}
+
+const loadingOverlay = document.getElementById("loadingOverlay");
+
+vid.addEventListener("playing", () => {
+  loadingOverlay.classList.remove("show");
+  if (currentTrial) stopBtn.disabled = false;
+});
+vid.addEventListener("waiting", () => {
+  // buffering mid-playback: show the spinner again so it never looks frozen
+  if (currentTrial) loadingOverlay.classList.add("show");
+});
+vid.addEventListener("error", () => {
+  if (!currentTrial) return;
+  const failed = currentTrial;
+  currentTrial = null;
+  loadingOverlay.classList.remove("show");
+  if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+  stage.classList.remove("active");
+  showVideoError(failed);
+});
+
+function showVideoError(trial){
+  const meta = CONFIG.VIDEOS[trial.condition];
+  render(`
+    <span class="eyebrow" style="color:var(--stop);background:#fbeae9">Playback problem</span>
+    <h1>The video could not be loaded</h1>
+    <p>The video failed to load or play. Please check your internet connection and try again.</p>
+    <button class="primary" onclick="startTrial('${trial.condition}', ${trial.is_practice})">Try again</button>
+    <p class="muted" style="margin-top:18px">If this keeps happening, please return the study on Prolific and message the researcher.</p>
+    <p class="muted">(Technical detail for the researcher: could not load <code>${meta.src}</code>)</p>
+  `);
+}
+
+function endTrial(pressed){
+  if (!currentTrial) return;
+  stopBtn.disabled = true;
+  currentTrial.stop_pressed = pressed;
+  currentTrial.stop_video_time_s = pressed ? vid.currentTime : null;
+  currentTrial.video_duration_s = isFinite(vid.duration) ? vid.duration : null;
+  currentTrial.fullscreen_exited = fsExitedDuringTrial;
+  vid.pause();
+
+  stoppedFlash.style.display = "flex";
+  stoppedFlash.textContent = pressed ? "Recorded ✓" : "Video ended";
+
+  const trial = currentTrial;
+  data.trials.push(trial);
+  if (!trial.is_practice) {
+    // pop this condition from the queue
+    trialQueue = trialQueue.filter((c, i) => !(c === trial.condition && i === 0));
+  }
+  currentTrial = null;
+
+  setTimeout(() => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+    stage.classList.remove("active");
+    vid.removeAttribute("src"); vid.load();
+    showTrialDone(trial);
+  }, 900);
+}
+
+stopBtn.addEventListener("click", () => { if (currentTrial && !stopBtn.disabled) endTrial(true); });
+document.addEventListener("keydown", e => {
+  if (e.code === "Space" && currentTrial && !stopBtn.disabled) { e.preventDefault(); endTrial(true); }
+});
+vid.addEventListener("ended", () => { if (currentTrial) endTrial(false); });
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement && currentTrial) fsExitedDuringTrial = true;
+});
+
+/* ============================================================
+   Questionnaires
+   ============================================================ */
+function likert(name, leftLabel, rightLabel, n = 7){
+  let items = "";
+  for (let i = 1; i <= n; i++){
+    items += `<label class="choice"><input type="radio" name="${name}" value="${i}"><span>${i}</span></label>`;
+  }
+  return `<div class="likert">${items}</div>
+          <div class="scale-ends"><span>${leftLabel}</span><span>${rightLabel}</span></div>`;
+}
+function radios(name, options){
+  return `<div class="choices">` + options.map(o =>
+    `<label class="choice"><input type="radio" name="${name}" value="${o}"><span>${o}</span></label>`
+  ).join("") + `</div>`;
+}
+
+function showVideoQuestions(){
+  setProgress(10);
+  render(`
+    <span class="eyebrow">About the videos</span>
+    <h1>Questions about the videos you watched</h1>
+    <p class="muted">Please answer in a few sentences. There are no right or wrong answers.</p>
+    <form id="f" novalidate>
+
+      <div class="q" data-key="feel_luxury" data-type="text">
+        <label class="qtitle">One video showed a <strong>luxury / expensive car</strong> parked in front of your parking spot. Did you feel or notice anything in that situation? Did it change how you parked?<span class="req">*</span></label>
+        <textarea name="feel_luxury" placeholder="e.g. I left more space because..."></textarea>
+        <div class="error">Please write your answer.</div>
+      </div>
+
+      <div class="q" data-key="feel_pedestrian" data-type="text">
+        <label class="qtitle">One video showed <strong>pedestrians walking / watching nearby</strong>. Did you feel or notice anything in that situation?<span class="req">*</span></label>
+        <textarea name="feel_pedestrian"></textarea>
+        <div class="error">Please write your answer.</div>
+      </div>
+
+      <div class="q" data-key="feel_crowded" data-type="text">
+        <label class="qtitle">One video showed parking in a <strong>very crowded city area</strong>. Did you feel or notice anything when parking there?<span class="req">*</span></label>
+        <textarea name="feel_crowded"></textarea>
+        <div class="error">Please write your answer.</div>
+      </div>
+
+    </form>
+    <button class="primary" onclick="collectAndNext('f', showPersonalQuestions)">Continue</button>
+  `);
+}
+
+function showPersonalQuestions(){
+  setProgress(12);
+  render(`
+    <span class="eyebrow">About you</span>
+    <h1>A few questions about you as a driver</h1>
+    <form id="f" novalidate>
+
+      <div class="q" data-key="driving_years" data-type="value">
+        <label class="qtitle">How many years have you been driving?<span class="req">*</span></label>
+        <input type="number" name="driving_years" min="0" max="80" placeholder="e.g. 8">
+        <div class="error">Please enter a number.</div>
+      </div>
+
+      <div class="q" data-key="driving_frequency" data-type="radio">
+        <label class="qtitle">How often do you drive?<span class="req">*</span></label>
+        ${radios("driving_frequency", ["Every day","A few times a week","About once a week","A few times a month","Rarely / almost never"])}
+        <div class="error">Please choose one.</div>
+      </div>
+
+      <div class="q" data-key="parking_confidence" data-type="radio">
+        <label class="qtitle">How confident are you in your parallel parking?<span class="req">*</span></label>
+        ${likert("parking_confidence","Not at all confident","Very confident")}
+        <div class="error">Please choose a rating.</div>
+      </div>
+
+      <div class="q" data-key="owns_car" data-type="radio">
+        <label class="qtitle">Do you own a car?<span class="req">*</span></label>
+        ${radios("owns_car",["Yes","No"])}
+        <div class="error">Please choose one.</div>
+      </div>
+
+      <div class="q hidden" id="q_car_model" data-key="car_model" data-type="text">
+        <label class="qtitle">What car do you own? (make, model, and year if you know it)<span class="req">*</span></label>
+        <input type="text" name="car_model" placeholder="e.g. 2019 Toyota Corolla">
+        <div class="error">Please write your answer.</div>
+      </div>
+
+      <div class="q hidden" id="q_backup_cam" data-key="backup_camera" data-type="radio">
+        <label class="qtitle">Does your car have a backup (rear-view) camera?<span class="req">*</span></label>
+        ${radios("backup_camera",["Yes","No","Not sure"])}
+        <div class="error">Please choose one.</div>
+      </div>
+
+      <div class="q" data-key="accident_history" data-type="radio">
+        <label class="qtitle">Have you ever been involved in a car accident (as the driver)?<span class="req">*</span></label>
+        ${radios("accident_history",["Yes, more than once","Yes, once","No, never"])}
+        <div class="error">Please choose one.</div>
+      </div>
+
+      <div class="q" data-key="has_insurance" data-type="radio">
+        <label class="qtitle">Do you currently have car insurance?<span class="req">*</span></label>
+        ${radios("has_insurance",["Yes","No","Not sure"])}
+        <div class="error">Please choose one.</div>
+      </div>
+
+      <div class="q hidden" id="q_ins_cost" data-key="insurance_annual_cost" data-type="text">
+        <label class="qtitle">Roughly how much do you pay for car insurance per year? (your best estimate, in your local currency)<span class="req">*</span></label>
+        <input type="text" name="insurance_annual_cost" placeholder="e.g. about $1,200 per year">
+        <div class="error">Please write your answer.</div>
+      </div>
+
+      <div class="q hidden" id="q_ins_coverage" data-key="insurance_coverage" data-type="text">
+        <label class="qtitle">What kind of coverage does your insurance include, as far as you know? (e.g. liability only, collision, comprehensive, roadside assistance...)<span class="req">*</span></label>
+        <textarea name="insurance_coverage"></textarea>
+        <div class="error">Please write your answer.</div>
+      </div>
+
+      <div class="q hidden" id="q_ins_process" data-key="insurance_claim_process" data-type="text">
+        <label class="qtitle">Imagine your car gets scratched or damaged and you want to use your insurance. What would you need to do? (e.g. call the police, contact your insurer, take photos...)<span class="req">*</span></label>
+        <textarea name="insurance_claim_process"></textarea>
+        <div class="error">Please write your answer.</div>
+      </div>
+
+    </form>
+    <button class="primary" onclick="collectAndNext('f', showSubmit)">Finish questions</button>
+  `);
+
+  // conditional questions
+  const form = document.getElementById("f");
+  form.addEventListener("change", e => {
+    if (e.target.name === "owns_car"){
+      const yes = e.target.value === "Yes";
+      document.getElementById("q_car_model").classList.toggle("hidden", !yes);
+      document.getElementById("q_backup_cam").classList.toggle("hidden", !yes);
+    }
+    if (e.target.name === "has_insurance"){
+      const yes = e.target.value === "Yes";
+      ["q_ins_cost","q_ins_coverage","q_ins_process"].forEach(id =>
+        document.getElementById(id).classList.toggle("hidden", !yes));
+    }
+  });
+}
+
+function collectAndNext(formId, next){
+  const form = document.getElementById(formId);
+  let ok = true;
+  form.querySelectorAll(".q").forEach(q => {
+    q.classList.remove("invalid");
+    if (q.classList.contains("hidden")) return;
+    const key = q.dataset.key;
+    const type = q.dataset.type;
+    let value = null;
+    if (type === "radio"){
+      const checked = q.querySelector("input:checked");
+      value = checked ? checked.value : null;
+    } else {
+      const input = q.querySelector("textarea, input");
+      value = input.value.trim();
+      if (value === "") value = null;
+    }
+    if (value === null){ q.classList.add("invalid"); ok = false; }
+    else data.answers[key] = value;
+  });
+  if (!ok){
+    const first = form.querySelector(".q.invalid");
+    if (first) first.scrollIntoView({behavior:"smooth", block:"center"});
+    return;
+  }
+  next();
+}
+
+/* ============================================================
+   Submission
+   ============================================================ */
+function showSubmit(){
+  setProgress(13);
+  render(`
+    <span class="eyebrow">Almost done</span>
+    <h1>Submit your responses</h1>
+    <p>Press the button below to submit your data and return to Prolific to receive your completion code.</p>
+    <button class="primary" id="submitBtn" onclick="submitData()">Submit and finish</button>
+    <p class="muted" id="submitStatus" style="margin-top:14px"></p>
+  `);
+}
+
+function flattenData(){
+  const flat = {
+    prolific_pid: data.prolific_pid,
+    study_id: data.study_id,
+    session_id: data.session_id,
+    started_at: data.started_at,
+    finished_at: data.finished_at,
+    user_agent: data.user_agent,
+    screen_size: data.screen_size,
+    trial_order: data.trial_order.join("|")
+  };
+  data.trials.forEach(t => {
+    const p = t.is_practice ? `practice${t.condition === "practice" ? "" : "_" + t.condition}` : t.condition;
+    flat[`${p}_stop_pressed`] = t.stop_pressed;
+    flat[`${p}_stop_time_s`] = t.stop_video_time_s;
+    flat[`${p}_video_duration_s`] = t.video_duration_s;
+    flat[`${p}_order_index`] = t.order_index;
+    flat[`${p}_fullscreen_exited`] = t.fullscreen_exited;
+    flat[`${p}_comment`] = t.comment ?? "";
+  });
+  if (data.scrub){
+    flat.scrub_selected_time_s = data.scrub.selected_time_s;
+    flat.scrub_video_duration_s = data.scrub.video_duration_s;
+    flat.scrub_selected_fraction = data.scrub.selected_fraction;
+    flat.scrub_seek_count = data.scrub.seek_count;
+  }
+  Object.assign(flat, data.answers);
+  return flat;
+}
+
+function toCSV(obj){
+  const esc = v => `"${String(v ?? "").replace(/"/g,'""')}"`;
+  const keys = Object.keys(obj);
+  return keys.map(esc).join(",") + "\n" + keys.map(k => esc(obj[k])).join(",");
+}
+
+async function submitData(){
+  const btn = document.getElementById("submitBtn");
+  const status = document.getElementById("submitStatus");
+  btn.disabled = true;
+  data.finished_at = new Date().toISOString();
+  const flat = flattenData();
+
+  let sent = false;
+  if (CONFIG.DATA_ENDPOINT){
+    status.textContent = "Submitting...";
+    try {
+      await fetch(CONFIG.DATA_ENDPOINT, {
+        method: "POST",
+        mode: "no-cors",
+        headers: {"Content-Type": "text/plain"},
+        body: JSON.stringify({ flat, raw: data })
+      });
+      sent = true;
+    } catch(e){ sent = false; }
+  }
+
+  if (!CONFIG.DATA_ENDPOINT || !sent){
+    // Fallback: download CSV so no data is lost
+    const blob = new Blob([toCSV(flat)], {type:"text/csv"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `parking_study_${data.prolific_pid || "anonymous"}.csv`;
+    a.click();
+  }
+  showDone(sent);
+}
+
+function showDone(sent){
+  setProgress(14);
+  const code = CONFIG.PROLIFIC_COMPLETION_CODE;
+  const url = `https://app.prolific.com/submissions/complete?cc=${encodeURIComponent(code)}`;
+  render(`
+    <div class="badge-ok">✓ ${sent ? "Data submitted" : "Data saved"}</div>
+    <h1>Thank you!</h1>
+    <p>Your responses have been recorded. Thank you for taking part in this study.</p>
+    ${sent ? "" : `<p class="muted">A CSV file with your responses was downloaded. If the researcher asked you to upload it, please do so; otherwise you can ignore it.</p>`}
+    <p>Click below to return to Prolific and register your completion.<br>
+    Your completion code: <strong>${code}</strong></p>
+    <button class="primary" onclick="location.href='${url}'">Return to Prolific</button>
+  `);
+}
+
+/* ============================================================
+   Init
+   ============================================================ */
+(function init(){
+  trialQueue = [...CONFIG.MAIN_TRIAL_ORDER];
+  if (CONFIG.RANDOMIZE_TRIALS){
+    for (let i = trialQueue.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [trialQueue[i], trialQueue[j]] = [trialQueue[j], trialQueue[i]];
+    }
+  }
+  data.trial_order = [...trialQueue];
+  showWelcome();
+})();
+</script>
+</body>
+</html>
